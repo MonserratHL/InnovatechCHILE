@@ -41,7 +41,7 @@ function App() {
         {planes.map(plan=>(
           <li key={plan.id}>
             <h2>{plan.nombre}</h2>
-            <p>{plan-descripcion}</p>
+            <p>{plan.descripcion}</p>
             <strong>{plan.precio}</strong>
           </li>
 
