@@ -1,0 +1,36 @@
+#nombre del flujo completo
+
+name: CI Pipeline
+
+#acciones que ejecutan el archivo
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+
+
+#los jobs son trabajos a ejecutar
+jobs:
+  front-build: 
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository (git clone)
+        uses: actions/checkout@v4
+
+      - name: Setup node (instalar node)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar las dependencias
+        run: npm install
+
+      - name: Construir la aplicación
+        run: npm run build  
