@@ -58,6 +58,20 @@ jobs:
   back-test:
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:8
+        ports:
+          - 3306:3306
+        env:
+          MYSQL_ROOT_PASSWORD: ""
+          MYSQL_DATABASE: spadb
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     defaults:
       run:
         working-directory: backend
@@ -75,6 +89,16 @@ jobs:
 
       - name: Dar permisos al wrapper de Maven
         run: chmod +x mvnw
+
+      - name: Esperar a que MySQL esté listo
+        run: |
+          for i in {1..60}; do
+            if mysqladmin ping -h"127.0.0.1" --silent; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
 
       - name: Ejecutar pruebas backend
         run: ./mvnw test
