@@ -64,7 +64,7 @@ jobs:
         ports:
           - 3306:3306
         env:
-          MYSQL_ROOT_PASSWORD: ""
+          MYSQL_ROOT_PASSWORD: password123
           MYSQL_DATABASE: spadb
         options: >-
           --health-cmd="mysqladmin ping --silent"
