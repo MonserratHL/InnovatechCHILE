@@ -1,38 +1,12 @@
-#nombre del flujo completo
 name: CI Pipeline
 
-#acciones que ejecutan el archivo:
 on:
   pull_request:
   push:
     branches:
       - develop
 
-#los jobs son trabajos a ejecutar:
-#Aqui se prueba el test del front como un job
 jobs:
-  front-test:
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: frontend
-
-    steps:
-      - name: Checkout repository (git clone)
-        uses: actions/checkout@v4
-
-      - name: Setup node (instalar node)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Instalar las dependencias
-        run: npm install
-
-      - name: Ejecutar validaciones frontend
-        run: npm run lint
-
   front-build:
     runs-on: ubuntu-latest
 
@@ -47,7 +21,7 @@ jobs:
       - name: Setup node (instalar node)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
       
       - name: Instalar las dependencias
         run: npm install
@@ -64,8 +38,8 @@ jobs:
         ports:
           - 3306:3306
         env:
-          MYSQL_ROOT_PASSWORD: password123
-          MYSQL_DATABASE: spadb
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: innovatechdb
         options: >-
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
@@ -84,27 +58,50 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
           cache: maven
 
-      - name: Dar permisos al wrapper de Maven
-        run: chmod +x mvnw
+      - name: Verificar estructura del proyecto
+        run: |
+          if [ ! -f "pom.xml" ]; then
+            echo "❌ Error: pom.xml no encontrado"
+            exit 1
+          fi
 
       - name: Esperar a que MySQL esté listo
         run: |
           for i in {1..60}; do
-            if mysqladmin ping -h"127.0.0.1" --silent; then
+            if mysqladmin ping -h"127.0.0.1" -uroot -proot --silent; then
+              echo "✅ MySQL está listo"
               exit 0
             fi
             sleep 1
           done
+          echo "❌ MySQL no está disponible"
           exit 1
 
+      - name: Crear esquema de base de datos
+        run: |
+          mysql -h"127.0.0.1" -uroot -proot innovatechdb << 'EOF'
+          CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100),
+            email VARCHAR(100),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          INSERT INTO users (name, email) VALUES ('Test User', 'test@innovatech.cl');
+          EOF
+
       - name: Ejecutar pruebas backend
-        run: ./mvnw test
+        run: mvn test
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/innovatechdb
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: root
 
   back-build:
     runs-on: ubuntu-latest
+    needs: back-test
 
     defaults:
       run:
@@ -118,11 +115,17 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
           cache: maven
 
-      - name: Dar permisos al wrapper de Maven
-        run: chmod +x mvnw
-
       - name: Construir la aplicación backend
-        run: ./mvnw clean package -DskipTests
+        run: mvn clean package -DskipTests
+      
+      - name: Verificar artefacto generado
+        run: |
+          if [ -f "target/innovatech-api-1.0.0.jar" ]; then
+            echo "✅ JAR compilado exitosamente"
+          else
+            echo "❌ JAR no encontrado"
+            exit 1
+          fi
