@@ -24,7 +24,7 @@ jobs:
           node-version: '18'
       
       - name: Instalar las dependencias
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Construir la aplicación
         run: npm run build
@@ -68,16 +68,20 @@ jobs:
             exit 1
           fi
 
+      # FIX 2.3: Increased MySQL startup timeout from 60 to 300 seconds (5 minutes)
       - name: Esperar a que MySQL esté listo
         run: |
-          for i in {1..60}; do
-            if mysqladmin ping -h"127.0.0.1" -uroot -proot --silent; then
-              echo "✅ MySQL está listo"
+          for i in {1..300}; do
+            if mysqladmin ping -h"127.0.0.1" -uroot -proot --silent 2>/dev/null; then
+              echo "✅ MySQL está listo en intento $i"
               exit 0
+            fi
+            if [ $((i % 30)) -eq 0 ]; then
+              echo "⏳ Esperando MySQL... (intento $i/300)"
             fi
             sleep 1
           done
-          echo "❌ MySQL no está disponible"
+          echo "❌ MySQL no está disponible después de 5 minutos"
           exit 1
 
       - name: Crear esquema de base de datos
@@ -121,11 +125,13 @@ jobs:
       - name: Construir la aplicación backend
         run: mvn clean package -DskipTests
       
+      # FIX 2.1: Changed JAR pattern from specific name to glob pattern for flexibility
       - name: Verificar artefacto generado
         run: |
-          if [ -f "target/innovatech-api-1.0.0.jar" ]; then
-            echo "✅ JAR compilado exitosamente"
+          if compgen -G "target/backend.jar" > /dev/null; then
+            echo "✅ JAR compilado exitosamente: $(ls -lh target/backend.jar)"
           else
-            echo "❌ JAR no encontrado"
+            echo "❌ JAR no encontrado en target/"
+            ls -la target/
             exit 1
           fi
