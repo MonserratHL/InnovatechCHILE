@@ -68,7 +68,7 @@ jobs:
             exit 1
           fi
 
-      # FIX 2.3: Increased MySQL startup timeout from 60 to 300 seconds (5 minutes)
+      # FIXED: Increased MySQL startup timeout from 60 to 300 seconds (5 minutes)
       - name: Esperar a que MySQL esté listo
         run: |
           for i in {1..300}; do
@@ -125,13 +125,14 @@ jobs:
       - name: Construir la aplicación backend
         run: mvn clean package -DskipTests
       
-      # FIX 2.1: Changed JAR pattern from specific name to glob pattern for flexibility
+      # FIXED: Changed JAR pattern to match finalName in pom.xml
       - name: Verificar artefacto generado
         run: |
-          if compgen -G "target/backend.jar" > /dev/null; then
-            echo "✅ JAR compilado exitosamente: $(ls -lh target/backend.jar)"
+          if [ -f "target/backend.jar" ]; then
+            echo "✅ JAR compilado exitosamente"
+            ls -lh target/backend.jar
           else
             echo "❌ JAR no encontrado en target/"
-            ls -la target/
+            ls -la target/ || true
             exit 1
           fi
