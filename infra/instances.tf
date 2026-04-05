@@ -5,8 +5,8 @@
 resource "aws_launch_template" "frontend_template" {
   name_prefix   = "innovatech-frontend-"
   image_id      = data.aws_ami.ubuntu.id
-  instance_type = var.instance_type
-  key_name      = var.key_pair_name
+  instance_type = "t2.micro"
+  key_name      = "spa-key"
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
@@ -21,14 +21,14 @@ exec > /var/log/startup.log 2>&1
 echo "=== INICIANDO SETUP FRONTEND ===" 
 date
 
-# Actualizar sistema y aplicar parches de seguridad
+# Actualizar sistema
 apt update -y
 apt upgrade -y
 
-# Instalar herramientas necesarias
-apt install -y curl wget git awscli docker.io nginx jq
+# Instalar herramientas
+apt install -y curl wget git docker.io nginx jq
 
-# Iniciar y habilitar Docker
+# Iniciar Docker
 systemctl start docker
 systemctl enable docker
 usermod -aG docker ubuntu
@@ -37,18 +37,16 @@ usermod -aG docker ubuntu
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt install -y nodejs npm
 
-# Verificar instalaciones
 echo "=== Instalaciones ===" >> /var/log/startup.log
 node --version >> /var/log/startup.log
 npm --version >> /var/log/startup.log
 docker --version >> /var/log/startup.log
-git --version >> /var/log/startup.log
 
-# Crear carpeta para frontend
+# Crear carpeta frontend
 mkdir -p /home/ubuntu/frontend/src
 cd /home/ubuntu/frontend
 
-# Crear package.json
+# package.json
 cat > package.json << 'PKGJSON'
 {
   "name": "innovatech-frontend",
@@ -70,7 +68,7 @@ cat > package.json << 'PKGJSON'
 }
 PKGJSON
 
-# Crear vite.config.js
+# vite.config.js
 cat > vite.config.js << 'VITECFG'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -80,7 +78,7 @@ export default defineConfig({
 })
 VITECFG
 
-# Crear index.html
+# index.html
 cat > index.html << 'HTML'
 <!DOCTYPE html>
 <html lang="es">
@@ -97,9 +95,9 @@ cat > index.html << 'HTML'
     .status { background: white; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 5px solid #28a745; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .status.error { border-left-color: #dc3545; }
     .status.warning { border-left-color: #ffc107; }
-    .status h3 { margin-bottom: 10px; color: #333; font-size: 18px; }
+    .status h3 { margin-bottom: 10px; color: #333; }
     .status p { color: #666; line-height: 1.6; }
-    .status code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+    code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
   </style>
 </head>
 <body>
@@ -109,7 +107,7 @@ cat > index.html << 'HTML'
 </html>
 HTML
 
-# Crear src/main.jsx
+# src/main.jsx
 cat > src/main.jsx << 'JSX'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -122,47 +120,35 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 )
 JSX
 
-# Crear src/App.jsx
+# src/App.jsx
 cat > src/App.jsx << 'JSX'
 import { useState, useEffect } from 'react'
 
 function App() {
   const [backendStatus, setBackendStatus] = useState('Verificando...')
   const [dbStatus, setDbStatus] = useState('Verificando...')
-  const [instanceInfo, setInstanceInfo] = useState({})
 
   useEffect(() => {
-    // Obtener información de la instancia
-    fetch('http://169.254.169.254/latest/meta-data/instance-id')
-      .then(r => r.text())
-      .then(id => setInstanceInfo(prev => ({ ...prev, frontend_id: id })))
-      .catch(e => console.log('Error getting instance ID:', e))
-
-    // Verificar Backend - Usar hostname o IP local
     const backendUrl = window.location.hostname
     const apiUrl = `http://${backendUrl}:8080/api`
     
-    console.log('Intentando conectar a Backend en:', apiUrl)
+    console.log('Conectando a Backend en:', apiUrl)
     
     fetch(`${apiUrl}/health`)
       .then(r => r.json())
       .then(data => {
-        console.log('Backend response:', data)
         setBackendStatus(`✅ CONECTADO - ${JSON.stringify(data)}`)
       })
       .catch(e => {
-        console.error('Backend error:', e)
         setBackendStatus(`❌ NO DISPONIBLE - ${e.message}`)
       })
 
     fetch(`${apiUrl}/health/db`)
       .then(r => r.json())
       .then(data => {
-        console.log('Database response:', data)
         setDbStatus(`✅ CONECTADA - ${JSON.stringify(data)}`)
       })
       .catch(e => {
-        console.error('Database error:', e)
         setDbStatus(`❌ NO DISPONIBLE - ${e.message}`)
       })
   }, [])
@@ -172,19 +158,17 @@ function App() {
       <header>
         <h1>🚀 Innovatech Frontend - POC</h1>
         <p>Arquitectura de 3 capas en AWS (Lift & Shift)</p>
-        <p style={{fontSize: '12px', color: '#999', marginTop: '10px'}}>Frontend ID: {instanceInfo.frontend_id || 'cargando...'}</p>
       </header>
 
       <div className="status">
         <h3>✅ Frontend Status</h3>
-        <p>Frontend React está corriendo correctamente en Nginx (Puerto 80)</p>
-        <p><code>Instancia: t2.micro | Subnet: 10.0.1.0/24 (Pública) | Docker: Instalado</code></p>
+        <p>Frontend React corriendo en Nginx (Puerto 80)</p>
+        <p><code>Instancia: t2.micro | Subnet: 10.0.1.0/24 | Docker: Instalado</code></p>
       </div>
 
       <div className={`status ${backendStatus.includes('❌') ? 'error' : ''}`}>
         <h3>🔗 Conectividad Frontend → Backend</h3>
         <p>{backendStatus}</p>
-        <p style={{fontSize: '12px', color: '#999', marginTop: '10px'}}>Intentando conectar a: <code>http://{window.location.hostname}:8080/api</code></p>
       </div>
 
       <div className={`status ${dbStatus.includes('❌') ? 'error' : ''}`}>
@@ -193,11 +177,11 @@ function App() {
       </div>
 
       <div className="status warning">
-        <h3>ℹ️ Detalles de la Arquitectura</h3>
-        <p><strong>Frontend:</strong> Subnet Pública 10.0.1.0/24 (Exposada a Internet) - Security Group abierto a HTTP/HTTPS</p>
-        <p><strong>Backend:</strong> Subnet Privada 10.0.2.0/24 - Acceso SOLO desde Frontend (Puerto 8080)</p>
-        <p><strong>Data:</strong> Subnet Privada 10.0.2.0/24 - Acceso SOLO desde Backend (Puerto 3306)</p>
-        <p style={{marginTop: '10px', fontSize: '12px'}}><strong>Principio de Mínimo Privilegio Aplicado:</strong> Cada capa solo accede a la siguiente</p>
+        <h3>ℹ️ Arquitectura</h3>
+        <p><strong>Frontend:</strong> Subnet Pública 10.0.1.0/24 (Exposada a Internet)</p>
+        <p><strong>Backend:</strong> Subnet Privada 10.0.2.0/24 - Acceso solo desde Frontend</p>
+        <p><strong>Data:</strong> Subnet Privada 10.0.2.0/24 - Acceso solo desde Backend</p>
+        <p style={{marginTop: '10px', fontSize: '12px'}}><strong>Mínimo Privilegio:</strong> Cada capa accede solo a la siguiente</p>
       </div>
     </div>
   )
@@ -209,45 +193,35 @@ JSX
 # Instalar dependencias
 chown -R ubuntu:ubuntu /home/ubuntu/frontend
 cd /home/ubuntu/frontend
-npm install --legacy-peer-deps --verbose
+npm install --legacy-peer-deps
 
-# Buildear React
+# Build
 npm run build
 
-# Configurar Nginx para servir React SPA
+# Configurar Nginx
 cat > /etc/nginx/sites-available/default << 'NGINX'
 server {
     listen 80 default_server;
-    listen [::]:80 default_server;
-
     root /home/ubuntu/frontend/dist;
-    index index.html index.htm index.nginx-debian.html;
+    index index.html;
 
     server_name _;
 
     location / {
-        # Importante: Servir index.html para rutas SPA
         try_files $uri $uri/ /index.html;
     }
 
-    # Caché para assets estáticos
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
-    }
-
-    # Bloquear acceso a archivos de configuración
-    location ~ /\. {
-        deny all;
     }
 }
 NGINX
 
-# Restart Nginx
 systemctl restart nginx
 systemctl enable nginx
 
-echo "=== FRONTEND COMPLETADO EXITOSAMENTE ===" >> /var/log/startup.log
+echo "=== FRONTEND COMPLETADO ===" >> /var/log/startup.log
 date >> /var/log/startup.log
 EOF
   )
@@ -257,7 +231,6 @@ EOF
     tags = {
       Name = "innovatech-frontend"
       Tier = "Frontend"
-      Environment = "POC"
     }
   }
 
@@ -273,8 +246,8 @@ EOF
 resource "aws_launch_template" "backend_template" {
   name_prefix   = "innovatech-backend-"
   image_id      = data.aws_ami.ubuntu.id
-  instance_type = var.instance_type
-  key_name      = var.key_pair_name
+  instance_type = "t2.micro"
+  key_name      = "spa-key"
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
@@ -289,14 +262,14 @@ exec > /var/log/startup.log 2>&1
 echo "=== INICIANDO SETUP BACKEND ===" 
 date
 
-# Actualizar sistema y aplicar parches de seguridad
+# Actualizar sistema
 apt update -y
 apt upgrade -y
 
-# Instalar herramientas necesarias
-apt install -y curl wget git awscli docker.io jq
+# Instalar herramientas
+apt install -y curl wget git docker.io jq awscli
 
-# Iniciar y habilitar Docker
+# Iniciar Docker
 systemctl start docker
 systemctl enable docker
 usermod -aG docker ubuntu
@@ -310,14 +283,12 @@ apt install -y maven
 # Instalar cliente MySQL
 apt install -y mysql-client
 
-# Verificar instalaciones
 echo "=== Instalaciones ===" >> /var/log/startup.log
 java -version >> /var/log/startup.log 2>&1
 mvn -version >> /var/log/startup.log
-docker --version >> /var/log/startup.log
 
-# IMPORTANTE: Obtener la IP privada de la instancia Data DINÁMICAMENTE
-echo "Esperando a que Data esté disponible..." >> /var/log/startup.log
+# Obtener IP de Data DINÁMICAMENTE
+echo "Esperando Data..." >> /var/log/startup.log
 DATA_IP=""
 for i in {1..60}; do
   DATA_IP=$(aws ec2 describe-instances \
@@ -327,18 +298,13 @@ for i in {1..60}; do
     --output text 2>/dev/null || echo "")
   
   if [ ! -z "$DATA_IP" ] && [ "$DATA_IP" != "None" ]; then
-    echo "Data IP encontrada: $DATA_IP" >> /var/log/startup.log
+    echo "Data IP: $DATA_IP" >> /var/log/startup.log
     break
-  fi
-  
-  if [ $((i % 10)) -eq 0 ]; then
-    echo "Intento $i/60 - esperando Data..." >> /var/log/startup.log
   fi
   sleep 1
 done
 
 if [ -z "$DATA_IP" ] || [ "$DATA_IP" == "None" ]; then
-  echo "ADVERTENCIA: No se pudo obtener IP de Data, usando default 10.0.2.20" >> /var/log/startup.log
   DATA_IP="10.0.2.20"
 fi
 
@@ -347,7 +313,7 @@ mkdir -p /home/ubuntu/backend/src/main/java/com/innovatech/api
 mkdir -p /home/ubuntu/backend/src/main/resources
 cd /home/ubuntu/backend
 
-# pom.xml - Corregido
+# pom.xml - CORREGIDO
 cat > pom.xml << 'XMLEOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -362,7 +328,7 @@ cat > pom.xml << 'XMLEOF'
     <packaging>jar</packaging>
 
     <name>Innovatech API</name>
-    <description>REST API para Innovatech POC - Lift & Shift</description>
+    <description>REST API para Innovatech POC</description>
 
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -376,26 +342,22 @@ cat > pom.xml << 'XMLEOF'
     </properties>
 
     <dependencies>
-        <!-- Spring Boot Web (CORREGIDO: spring-boot-starter-web, no webmvc) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- Spring Boot Data JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
-        <!-- MySQL Driver -->
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
             <version>8.0.33</version>
         </dependency>
 
-        <!-- Spring Boot Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -414,7 +376,7 @@ cat > pom.xml << 'XMLEOF'
 </project>
 XMLEOF
 
-# application.properties - Usa la IP dinámica de Data
+# application.properties - Usa IP dinámica
 cat > src/main/resources/application.properties << PROPSEOF
 server.port=8080
 server.servlet.context-path=/api
@@ -424,9 +386,7 @@ spring.datasource.password=Password123!
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.show-sql=false
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
 logging.level.root=INFO
-logging.level.com.innovatech=DEBUG
 PROPSEOF
 
 # InnovatechApiApplication.java
@@ -489,7 +449,6 @@ public class HealthController {
         response.put("status", "OK");
         response.put("service", "backend");
         response.put("timestamp", LocalDateTime.now());
-        response.put("message", "Backend Spring Boot API is running");
         return ResponseEntity.ok(response);
     }
 
@@ -500,17 +459,16 @@ public class HealthController {
             if (jdbcTemplate != null) {
                 jdbcTemplate.queryForObject("SELECT 1", Integer.class);
                 response.put("status", "OK");
-                response.put("database", "MySQL Connected Successfully");
+                response.put("database", "MySQL Connected");
                 response.put("timestamp", LocalDateTime.now());
                 return ResponseEntity.ok(response);
             } else {
-                response.put("status", "WARNING");
-                response.put("database", "Database not yet initialized");
+                response.put("status", "ERROR");
+                response.put("database", "Database not initialized");
                 return ResponseEntity.status(503).body(response);
             }
         } catch (Exception e) {
             response.put("status", "ERROR");
-            response.put("database", "MySQL Connection Failed");
             response.put("message", e.getMessage());
             response.put("timestamp", LocalDateTime.now());
             return ResponseEntity.status(500).body(response);
@@ -519,25 +477,14 @@ public class HealthController {
 }
 JAVAEOF
 
-# Compilar proyecto
-echo "Compilando proyecto Spring Boot..." >> /var/log/startup.log
+# Compilar
 cd /home/ubuntu/backend
 chown -R ubuntu:ubuntu /home/ubuntu/backend
 mvn clean package -DskipTests 2>&1 | tee -a /var/log/startup.log
 
-# Verificar que el JAR se creó
-if [ -f "target/innovatech-api-1.0.0.jar" ]; then
-  echo "✅ JAR compilado exitosamente" >> /var/log/startup.log
-else
-  echo "❌ Error: JAR no fue creado" >> /var/log/startup.log
-  ls -la target/ >> /var/log/startup.log
-fi
-
-# Ejecutar Spring Boot
-echo "Iniciando Spring Boot en puerto 8080..." >> /var/log/startup.log
+# Ejecutar
 nohup java -jar target/innovatech-api-1.0.0.jar > /var/log/backend.log 2>&1 &
 
-sleep 5
 echo "=== BACKEND COMPLETADO ===" >> /var/log/startup.log
 date >> /var/log/startup.log
 EOF
@@ -548,7 +495,6 @@ EOF
     tags = {
       Name = "innovatech-backend"
       Tier = "Backend"
-      Environment = "POC"
     }
   }
 
@@ -564,8 +510,8 @@ EOF
 resource "aws_launch_template" "data_template" {
   name_prefix   = "innovatech-data-"
   image_id      = data.aws_ami.ubuntu.id
-  instance_type = var.instance_type
-  key_name      = var.key_pair_name
+  instance_type = "t2.micro"
+  key_name      = "spa-key"
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
@@ -580,56 +526,43 @@ exec > /var/log/startup.log 2>&1
 echo "=== INICIANDO SETUP DATA/MYSQL ===" 
 date
 
-# Actualizar sistema y aplicar parches de seguridad
+# Actualizar sistema
 apt update -y
 apt upgrade -y
 
-# Instalar MySQL Server
+# Instalar MySQL
 DEBIAN_FRONTEND=noninteractive apt install -y mysql-server
 
-# Configurar MySQL para aceptar conexiones desde subnet privada
+# Configurar MySQL
 sed -i "s/bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/mysql.conf.d/mysqld.cnf
 
-# Reiniciar MySQL
+# Restart
 systemctl restart mysql
 systemctl enable mysql
 
-# Verificar MySQL
 echo "=== MySQL version ===" >> /var/log/startup.log
 mysql --version >> /var/log/startup.log
 
-# Crear base de datos e usuarios con MÍNIMO PRIVILEGIO
-echo "Creando base de datos y usuarios..." >> /var/log/startup.log
+# Crear base de datos con MÍNIMO PRIVILEGIO
 mysql -u root << 'MYSQLEOF'
 CREATE DATABASE IF NOT EXISTS innovatechdb;
-
--- IMPORTANTE: Crear usuario SOLO para subnet privada (MÍNIMO PRIVILEGIO)
 CREATE USER 'innovatech_user'@'10.0.2.%' IDENTIFIED BY 'Password123!';
 GRANT ALL PRIVILEGES ON innovatechdb.* TO 'innovatech_user'@'10.0.2.%';
 FLUSH PRIVILEGES;
 
 USE innovatechdb;
-
--- Crear tabla de usuarios
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  email VARCHAR(100) NOT NULL UNIQUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  name VARCHAR(100),
+  email VARCHAR(100),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insertar datos de prueba
-INSERT INTO users (name, email) VALUES 
-  ('Admin Innovatech', 'admin@innovatech.cl'),
-  ('Usuario Test', 'test@innovatech.cl');
-
-SHOW DATABASES;
-SHOW USERS;
-SELECT * FROM users;
+INSERT INTO users (name, email) VALUES ('Admin Innovatech', 'admin@innovatech.cl');
+INSERT INTO users (name, email) VALUES ('Test User', 'test@innovatech.cl');
 MYSQLEOF
 
-echo "=== DATA/MYSQL COMPLETADO EXITOSAMENTE ===" >> /var/log/startup.log
+echo "=== DATA COMPLETADO ===" >> /var/log/startup.log
 date >> /var/log/startup.log
 EOF
   )
@@ -639,7 +572,6 @@ EOF
     tags = {
       Name = "innovatech-data"
       Tier = "Data"
-      Environment = "POC"
     }
   }
 
@@ -652,7 +584,6 @@ EOF
 # INSTANCIAS EC2
 # ==========================================
 
-# IMPORTANTE: Data debe crearse PRIMERO
 resource "aws_instance" "data" {
   launch_template {
     id      = aws_launch_template.data_template.id
@@ -667,7 +598,6 @@ resource "aws_instance" "data" {
   }
 }
 
-# Backend depende de Data
 resource "aws_instance" "backend" {
   launch_template {
     id      = aws_launch_template.backend_template.id
@@ -684,7 +614,6 @@ resource "aws_instance" "backend" {
   depends_on = [aws_instance.data]
 }
 
-# Frontend es pública
 resource "aws_instance" "frontend" {
   launch_template {
     id      = aws_launch_template.frontend_template.id
@@ -703,7 +632,7 @@ resource "aws_instance" "frontend" {
 }
 
 # ==========================================
-# ELASTIC IP PARA FRONTEND
+# ELASTIC IP
 # ==========================================
 
 resource "aws_eip" "frontend" {
@@ -721,52 +650,46 @@ resource "aws_eip" "frontend" {
 # OUTPUTS
 # ==========================================
 
-output "frontend_public_ip" {
-  value       = aws_eip.frontend.public_ip
-  description = "IP pública del Frontend - Acceso a React"
-}
-
 output "frontend_url" {
   value       = "http://${aws_eip.frontend.public_ip}"
-  description = "URL para acceder al Frontend - APLICACIÓN PRINCIPAL"
+  description = "URL Frontend - APLICACIÓN PRINCIPAL"
+}
+
+output "frontend_public_ip" {
+  value       = aws_eip.frontend.public_ip
+  description = "IP pública Frontend"
 }
 
 output "backend_private_ip" {
   value       = aws_instance.backend.private_ip
-  description = "IP privada del Backend"
+  description = "IP privada Backend"
 }
 
 output "data_private_ip" {
   value       = aws_instance.data.private_ip
-  description = "IP privada de Data/MySQL"
+  description = "IP privada Data"
 }
 
-output "frontend_instance_id" {
-  value       = aws_instance.frontend.id
-  description = "ID de instancia Frontend"
+output "frontend_id" {
+  value = aws_instance.frontend.id
 }
 
-output "backend_instance_id" {
-  value       = aws_instance.backend.id
-  description = "ID de instancia Backend"
+output "backend_id" {
+  value = aws_instance.backend.id
 }
 
-output "data_instance_id" {
-  value       = aws_instance.data.id
-  description = "ID de instancia Data"
+output "data_id" {
+  value = aws_instance.data.id
 }
 
 output "ssm_frontend" {
-  value       = "aws ssm start-session --target ${aws_instance.frontend.id} --region us-east-1"
-  description = "Comando SSH Session Manager - Frontend"
+  value = "aws ssm start-session --target ${aws_instance.frontend.id} --region us-east-1"
 }
 
 output "ssm_backend" {
-  value       = "aws ssm start-session --target ${aws_instance.backend.id} --region us-east-1"
-  description = "Comando SSH Session Manager - Backend"
+  value = "aws ssm start-session --target ${aws_instance.backend.id} --region us-east-1"
 }
 
 output "ssm_data" {
-  value       = "aws ssm start-session --target ${aws_instance.data.id} --region us-east-1"
-  description = "Comando SSH Session Manager - Data"
+  value = "aws ssm start-session --target ${aws_instance.data.id} --region us-east-1"
 }
