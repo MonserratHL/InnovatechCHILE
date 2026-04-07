@@ -31,7 +31,7 @@ resource "aws_internet_gateway" "main" {
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.innovatech.id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[0]
+  availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
 
   tags = {
@@ -46,7 +46,7 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.innovatech.id
   cidr_block        = "10.0.2.0/24"
-  availability_zone = data.aws_availability_zones.available.names[1]
+  availability_zone = "us-east-1a"
 
   tags = {
     Name = "innovatech-private-subnet"
@@ -92,45 +92,44 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
+
 # ==========================================
-# IAM ROLE PARA SESSION MANAGER
+# ELASTIC IP PARA NAT GATEWAY
 # ==========================================
 
-resource "aws_iam_role" "ec2_ssm_role" {
-  name = "innovatech-ec2-ssm-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
+resource "aws_eip" "nat" {
+  domain = "vpc"
 
   tags = {
-    Name = "innovatech-ec2-ssm-role"
+    Name = "innovatech-nat-eip"
   }
 }
 
-resource "aws_iam_role_policy_attachment" "ssm_policy" {
-  role       = aws_iam_role.ec2_ssm_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+# ==========================================
+# NAT GATEWAY
+# ==========================================
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public.id
+
+  tags = {
+    Name = "innovatech-nat-gw"
+  }
+
+  depends_on = [aws_internet_gateway.main]
 }
 
-resource "aws_iam_role_policy_attachment" "ec2_read_policy" {
-  role       = aws_iam_role.ec2_ssm_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+# ==========================================
+# ROUTE PRIVADA HACIA NAT GATEWAY
+# ==========================================
+
+resource "aws_route" "private_nat" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main.id
 }
 
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "innovatech-ec2-profile"
-  role = aws_iam_role.ec2_ssm_role.name
-}
 
 # ==========================================
 # OUTPUTS
